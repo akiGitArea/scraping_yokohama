@@ -1,0 +1,8 @@
+###### Requirements without Version Specifiers ######`
+
+
+###### Requirements with Version Specifiers ######`
+load-dotenv == 0.1.0
+selenium == 4.8.2
+black == 22.6.0
+flake8 == 4.0.1
