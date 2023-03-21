@@ -7,16 +7,20 @@
 import gspread
 import time
 import datetime
-import requests
+
+# import requests
 from dateutil.relativedelta import relativedelta
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
+
+# from pydrive.auth import GoogleAuth
+# from pydrive.drive import GoogleDrive
+from googleapiclient.discovery import build
 
 # ServiceAccountCredentials：Googleの各サービスへアクセスできるservice変数を生成します。
 from oauth2client.service_account import ServiceAccountCredentials
 from selenium.webdriver.chrome.options import Options  # オプションを使うために必要
+from apiclient.http import MediaFileUpload
 
 places = {"三ツ沢公園": "150", "新横浜公園": "570"}
 today = datetime.date.today()
@@ -52,9 +56,63 @@ driver = webdriver.Chrome(options=option)
 driver.get("https://yoyaku.city.yokohama.lg.jp/")
 
 
+def uploadFileToGoogleDrive(service, fileName, local_path, mimetype, folder_id):
+    """
+    filename:   アップロード先でのファイル名
+    local_path: アップロードするファイルのローカルのパス
+    mimetype:   http通信の規格(csv→text/csv 参照:https://qiita.com/AkihiroTakamura/items/b93fbe511465f52bffaa)
+    """
+
+    # "parents": ["****"]この部分はGoogle Driveに作成したフォルダのURLの後ろ側の文字列に置き換えてください。
+    file_metadata = {"name": fileName, "mimeType": mimetype, "parents": [folder_id]}
+    media = MediaFileUpload(
+        local_path, mimetype=mimetype, chunksize=1024 * 1024, resumable=True
+    )
+    # media = MediaFileUpload(local_path, mimetype=mimetype,resumable=True ) #csvなどの場合はこちらでも可(チャンクサイズは不要)
+    file = (
+        service.files()
+        .create(body=file_metadata, media_body=media, fields="id")
+        .execute()
+    )
+    print(f"{fileName}のアップロード完了！")
+
+
 def applicationYokohama():
     # ユニークなnameのリストを作成（抽選データ保有ユーザーのみ）
     targetUsers = {}
+    # スクショ保存用のディレクトリ作成
+    SHARE_FOLDER_ID = "1hckWWf_S64gB7oQ8MUaYM9QKjzNVPdwY"
+    drive_service = build("drive", "v3", credentials=credentials)
+    dirNames = []
+    # ドライブのフォルダ名取得
+    response = (
+        drive_service.files()
+        .list(
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+            q=f"parents in '{SHARE_FOLDER_ID}' and trashed = false",
+            fields="nextPageToken, files(id, name)",
+        )
+        .execute()
+    )
+    for file in response.get("files", []):
+        print(f"Found file: {file.get('name')} ({file.get('id')})")
+        dirNames.append(file.get("name"))
+    # ドライブに当月フォルダない場合は作成
+    print(dirNames)
+    dir = ""
+    dirId = ""
+    if dayAfter2MonthYyyyMm not in dirNames:
+        file_metadata = {
+            "name": dayAfter2MonthYyyyMm,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [SHARE_FOLDER_ID],
+        }
+        dir = drive_service.files().create(body=file_metadata, fields="id").execute()
+        # fieldに指定したidをfileから取得できる
+        # print("Folder ID: %s" % dir.get("id"))
+        dirId = dir.get("id")
+
     for data in lottoryData:
         if data["name"] not in targetUsers:
             idPass = {}
@@ -79,19 +137,19 @@ def applicationYokohama():
         # ログイン
         driver.find_element(By.XPATH, '//*[@id="navi_login_r"]/img').click()
         time.sleep(1)
-        # 新規抽選を申し込む
-        driver.find_element(By.XPATH, '//*[@id="RSGK001_01"]').click()
-        time.sleep(1)
-        # スポーツ選択
-        driver.find_element(
-            By.XPATH, '//*[@id="FRM_RSGK402"]/div[3]/div/div/a[1]'
-        ).click()
-        time.sleep(1)
-        # テニスコート選択
-        driver.find_element(
-            By.XPATH, '//*[@id="FRM_RSGK403"]/div[3]/div/div/a[4]'
-        ).click()
-        time.sleep(1)
+        # # 新規抽選を申し込む
+        # driver.find_element(By.XPATH, '//*[@id="RSGK001_01"]').click()
+        # time.sleep(1)
+        # # スポーツ選択
+        # driver.find_element(
+        #     By.XPATH, '//*[@id="FRM_RSGK402"]/div[3]/div/div/a[1]'
+        # ).click()
+        # time.sleep(1)
+        # # テニスコート選択
+        # driver.find_element(
+        #     By.XPATH, '//*[@id="FRM_RSGK403"]/div[3]/div/div/a[4]'
+        # ).click()
+        # time.sleep(1)
         # userInfos = list(filter(lambda user: user["name"] == key, lottoryData))
         # for userInfo in userInfos:
         #     # 施設指定
@@ -131,68 +189,44 @@ def applicationYokohama():
         #     # 「申込を続ける」選択
         #     driver.find_element(By.XPATH, '//*[@id="idbtn_modoru"]').click()
         #     time.sleep(1)
-        # 「メニューへ」選択
-        driver.find_element(By.XPATH, '//*[@id="home_btn"]/a/img').click()
-        time.sleep(1)
+        # # 「メニューへ」選択
+        # driver.find_element(By.XPATH, '//*[@id="home_btn"]/a/img').click()
+        # time.sleep(1)
         # 「抽選申込・確認」選択
         driver.find_element(By.XPATH, '//*[@id="RSGK001_02"]').click()
         time.sleep(1)
         # スクショ
         driver.execute_script("document.body.style.zoom='80%'")  # スクショ用に画面を縮小
-        scleenShot = driver.get_screenshot_as_png()
+        # scleenShot = driver.get_screenshot_as_png()
         driver.save_screenshot(f"{key}.png")
         driver.execute_script("document.body.style.zoom='100%'")
-        # # スクショ保存用のディレクトリ作成
-        # gauth = GoogleAuth()
-        # # TODO ドライブアクセスするのに認証情報必要？
-        # # https://dev.classmethod.jp/articles/oauth2client-is-deprecated/
-        # gauth.LocalWebserverAuth()
-        # drive = GoogleDrive(gauth)
-        # folder_id = "1hckWWf_S64gB7oQ8MUaYM9QKjzNVPdwY"
-        # # TODO ドライブのフォルダ名取得
-        # # TODO ドライブに当月フォルダない場合は作成
-        # f_folder = drive.CreateFile(
-        #     {
-        #         "title": dayAfter2MonthYyyyMm,
-        #         "mimeType": "application/vnd.google-apps.folder",
-        #         "parents": [
-        #             {
-        #                 "id": folder_id,
-        #                 "kind": "drive#fileLink",
-        #             }
-        #         ],
-        #     }
+        uploadFileToGoogleDrive(
+            drive_service, f"{key}.png", f"./{key}.png", "image/png", dirId
+        )
+        # folder_id = dirId
+        # file_metadata = {"name": f"{key}.png", "parents": [folder_id]}
+        # media = MediaFileUpload(f"{key}.png", mimetype="text/plain", resumable=True)
+        # file = (
+        #     drive_service.files()
+        #     .create(body=file_metadata, media_body=media, fields="id")
+        #     .execute()
         # )
-        # f_folder.Upload()
-        # # Googleドライブに保存
-        # file_metadata = {
-        #     "title": f"{key}.png",
-        #     "mimeType": "application/vnd.google-apps.folder",
-        #     "parents": [
-        #         {
-        #             "id": folder_id,
-        #             "kind": "drive#fileLink",
-        #         }
-        #     ],
-        # }
-        # f = drive.CreateFile(file_metadata)
-        # f.SetContentFile(scleenShot)
-        # f.Upload(param={"supportsTeamDrives": True})
+
         # ログアウト
         driver.find_element(By.XPATH, '//*[@id="header"]/div[3]/a/img').click()
         time.sleep(1)
-        # TODO LINEにスクショ送信
-        # LineNotify 連携用トークン・キー準備
-        line_notify_token = "rC4NpRtelGBGi9I1A7wTvq47lz0qGQ32jh2giIyi8Po"
-        line_notify_api = "https://notify-api.line.me/api/notify"
-        # httpヘッダー設定
-        headers = {"Authorization": f"Bearer {line_notify_token}"}
-        # トーク送信メッセージ設定
-        payload = {"message": "抽選"}
-        # 送信画像設定
-        files = {"imageFile": open(f"{key}.png", "rb")}  # バイナリファイルオープン
-        # post実行
-        requests.post(line_notify_api, data=payload, headers=headers, files=files)
+        # # TODO LINEにスクショ送信
+        # # LineNotify 連携用トークン・キー準備
+        # line_notify_token = "rC4NpRtelGBGi9I1A7wTvq47lz0qGQ32jh2giIyi8Po"
+        # line_notify_api = "https://notify-api.line.me/api/notify"
+        # # httpヘッダー設定
+        # headers = {"Authorization": f"Bearer {line_notify_token}"}
+        # # トーク送信メッセージ設定
+        # payload = {"message": "抽選"}
+        # # 送信画像設定
+        # files = {"imageFile": open(f"{key}.png", "rb")}  # バイナリファイルオープン
+        # # post実行
+        # requests.post(line_notify_api, data=payload, headers=headers, files=files)
 
 
 applicationYokohama()
