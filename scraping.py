@@ -26,6 +26,7 @@ places = {"三ツ沢公園": "150", "新横浜公園": "570"}
 today = datetime.date.today()
 dayAfter2Month = today + relativedelta(months=2)
 dayAfter2MonthYyyyMm = dayAfter2Month.strftime("%Y%m")  # yyyymm
+folderName = dayAfter2MonthYyyyMm + "_横浜"
 # スプレッドシート操作の準備
 scope = [
     "https://spreadsheets.google.com/feeds",
@@ -83,7 +84,7 @@ def applicationYokohama():
     # スクショ保存用のディレクトリ作成
     SHARE_FOLDER_ID = "1hckWWf_S64gB7oQ8MUaYM9QKjzNVPdwY"
     drive_service = build("drive", "v3", credentials=credentials)
-    dirNames = []
+    dirInfos = []
     # ドライブのフォルダ名取得
     response = (
         drive_service.files()
@@ -97,21 +98,26 @@ def applicationYokohama():
     )
     for file in response.get("files", []):
         print(f"Found file: {file.get('name')} ({file.get('id')})")
-        dirNames.append(file.get("name"))
+        dirInfos.append({"name":file.get("name"),"id":file.get("id")})
     # ドライブに当月フォルダない場合は作成
-    print(dirNames)
+    print(dirInfos)
     dir = ""
     dirId = ""
-    if dayAfter2MonthYyyyMm not in dirNames:
-        file_metadata = {
-            "name": dayAfter2MonthYyyyMm,
-            "mimeType": "application/vnd.google-apps.folder",
-            "parents": [SHARE_FOLDER_ID],
-        }
-        dir = drive_service.files().create(body=file_metadata, fields="id").execute()
-        # fieldに指定したidをfileから取得できる
-        # print("Folder ID: %s" % dir.get("id"))
-        dirId = dir.get("id")
+    for dirInfo in dirInfos:
+        if folderName not in dirInfo["name"]:
+            file_metadata = {
+                "name": folderName,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [SHARE_FOLDER_ID],
+            }
+            dir = drive_service.files().create(body=file_metadata, fields="id").execute()
+            # fieldに指定したidをfileから取得できる
+            # print("Folder ID: %s" % dir.get("id"))
+            dirId = dir.get("id")
+            break
+        else:
+            dirId = dirInfo["id"]
+            break
 
     for data in lottoryData:
         if data["name"] not in targetUsers:
@@ -126,6 +132,7 @@ def applicationYokohama():
     for key, value in targetUsers.items():
         # print(f"key---------------------{key}")
         # print(f"value---------------------{value}")
+        userInfos = list(filter(lambda user: user["name"] == key, lottoryData))
         texts = driver.find_element(
             By.XPATH, '//*[@id="main001"]/div[1]/div/div/div/div[1]/input'
         )
@@ -137,61 +144,61 @@ def applicationYokohama():
         # ログイン
         driver.find_element(By.XPATH, '//*[@id="navi_login_r"]/img').click()
         time.sleep(1)
-        # # 新規抽選を申し込む
-        # driver.find_element(By.XPATH, '//*[@id="RSGK001_01"]').click()
-        # time.sleep(1)
-        # # スポーツ選択
-        # driver.find_element(
-        #     By.XPATH, '//*[@id="FRM_RSGK402"]/div[3]/div/div/a[1]'
-        # ).click()
-        # time.sleep(1)
-        # # テニスコート選択
-        # driver.find_element(
-        #     By.XPATH, '//*[@id="FRM_RSGK403"]/div[3]/div/div/a[4]'
-        # ).click()
-        # time.sleep(1)
-        # userInfos = list(filter(lambda user: user["name"] == key, lottoryData))
-        # for userInfo in userInfos:
-        #     # 施設指定
-        #     driver.find_element(
-        #         By.XPATH, f'//option[@value="{places[userInfo["place"]]}"]'
-        #     ).click()
-        #     time.sleep(1)
-        #     # テニスコート番号選択
-        #     driver.find_element(
-        #         By.XPATH,
-        #         f'//*[@id="FRM_RSGK404"]/div[7]/div/div/a[{str(int(userInfo["court_no"])+1)}]',
-        #     ).click()
-        #     time.sleep(1)
-        #     # 日付選択
-        #     driver.find_element(By.ID, f'idbtn_{userInfo["day"]}').click()
-        #     time.sleep(1)
-        #     # 時間とコート選択
-        #     driver.find_element(
-        #         By.ID,
-        #         f'idinput_{places[userInfo["place"]].rstrip("0")}{str(int(userInfo["court_no"])-1).zfill(2)}_{userInfo["date"]}_{userInfo["time"]}',
-        #     ).click()
-        #     time.sleep(1)
-        #     # 「申し込む」選択
-        #     driver.find_element(
-        #         By.XPATH,
-        #         '//*[@id="FRM_RSGK407"]/div[3]/div/div/div/button//*[@id="idbtn_modoru"]',
-        #     ).click()
-        #     time.sleep(1)
-        #     # 「次へ」選択
-        #     driver.find_element(
-        #         By.XPATH, '//*[@id="footer"]/div/button[2]//*[@id="idbtn_calview"]'
-        #     ).click()
-        #     time.sleep(1)
-        #     # 「確定」選択
-        #     driver.find_element(By.XPATH, '//*[@id="idbtn_calview"]').click()
-        #     time.sleep(1)
-        #     # 「申込を続ける」選択
-        #     driver.find_element(By.XPATH, '//*[@id="idbtn_modoru"]').click()
-        #     time.sleep(1)
-        # # 「メニューへ」選択
-        # driver.find_element(By.XPATH, '//*[@id="home_btn"]/a/img').click()
-        # time.sleep(1)
+        
+        for userInfo in userInfos:
+            # # 新規抽選を申し込む
+            driver.find_element(By.XPATH, '//*[@id="RSGK001_01"]').click()
+            time.sleep(1)
+            # スポーツ選択
+            driver.find_element(
+                By.XPATH, '//*[@id="FRM_RSGK402"]/div[3]/div/div/a[1]'
+            ).click()
+            time.sleep(0.2)
+            # テニスコート選択
+            driver.find_element(
+                By.XPATH, '//*[@id="FRM_RSGK403"]/div[3]/div/div/a[4]'
+            ).click()
+            time.sleep(0.2)
+            # 施設指定
+            driver.find_element(
+                By.XPATH, f'//option[@value="{places[userInfo["place"]]}"]'
+            ).click()
+            time.sleep(0.2)
+            # テニスコート番号選択
+            driver.find_element(
+                By.XPATH,
+                f'//*[@id="FRM_RSGK404"]/div[7]/div/div/a[{str(int(userInfo["court_no"])+1)}]',
+            ).click()
+            time.sleep(0.2)
+            # 日付選択
+            driver.find_element(By.ID, f'idbtn_{userInfo["day"]}').click()
+            time.sleep(1)
+            # 時間とコート選択
+            driver.find_element(
+                By.ID,
+                f'idinput_{places[userInfo["place"]].rstrip("0")}{str(int(userInfo["court_no"])-1).zfill(2)}_{userInfo["date"]}_{userInfo["time"]}',
+            ).click()
+            time.sleep(0.2)
+            # 「申し込む」選択
+            driver.find_element(
+                By.XPATH,
+                '//*[@id="FRM_RSGK407"]/div[3]/div/div/div/button//*[@id="idbtn_modoru"]',
+            ).click()
+            time.sleep(0.2)
+            # 「次へ」選択
+            driver.find_element(
+                By.XPATH, '//*[@id="footer"]/div/button[2]//*[@id="idbtn_calview"]'
+            ).click()
+            time.sleep(0.2)
+            # 「確定」選択
+            driver.find_element(By.XPATH, '//*[@id="idbtn_calview"]').click()
+            time.sleep(0.2)
+            # # 「申込を続ける」選択
+            # driver.find_element(By.XPATH, '//*[@id="idbtn_modoru"]').click()
+            # time.sleep(1)
+            # 「メニューへ」選択
+            driver.find_element(By.XPATH, '//*[@id="home_btn"]/a/img').click()
+            time.sleep(1)
         # 「抽選申込・確認」選択
         driver.find_element(By.XPATH, '//*[@id="RSGK001_02"]').click()
         time.sleep(1)
